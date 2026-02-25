@@ -150,7 +150,7 @@ def to_obsidian_md(session):
 
 
 def export_knowledge():
-    """将知识库 JSON 导出为 Obsidian 单条笔记"""
+    """将知识库 JSON 导出为 Obsidian 单条笔记（只导出新增的）"""
     kb_path = os.path.join(
         os.path.expanduser("~/amazon-workspace"),
         "knowledge", "knowledge.json"
@@ -159,12 +159,26 @@ def export_knowledge():
         return 0
     with open(kb_path, "r", encoding="utf-8") as f:
         data = json.load(f)
+    # 收集已有的知识点 id
+    existing_ids = set()
+    for root, dirs, files in os.walk(KNOWLEDGE_DIR):
+        for fn in files:
+            if fn.endswith(".md"):
+                fpath = os.path.join(root, fn)
+                with open(fpath, "r", encoding="utf-8") as ef:
+                    for line in ef:
+                        if line.startswith("id:"):
+                            existing_ids.add(line.split(":",1)[1].strip())
+                            break
     count = 0
     for k in data:
-        fname = f"{k['id']} {k['title']}.md"
+        if k['id'] in existing_ids:
+            continue
+        fname = f"{k['title']}.md"
         fname = re.sub(r'[/\\:*?"<>|]', '', fname)
         md = "\n".join([
             "---",
+            f"id: {k['id']}",
             f"date: {k['date']}",
             f"category: {k['category']}",
             f"tags: [知识库, {k['category']}]",
@@ -174,7 +188,9 @@ def export_knowledge():
             "",
             k['content']
         ])
-        with open(os.path.join(KNOWLEDGE_DIR, fname), "w") as f:
+        cat_dir = os.path.join(KNOWLEDGE_DIR, "亚马逊", k['category'])
+        os.makedirs(cat_dir, exist_ok=True)
+        with open(os.path.join(cat_dir, fname), "w") as f:
             f.write(md)
         count += 1
     return count
@@ -191,11 +207,17 @@ def main():
     existing_sids = set()
     for ef in glob.glob(os.path.join(CHAT_DIR, "*.md")):
         with open(ef, "r", encoding="utf-8") as efh:
+            in_fm = False
             for line in efh:
-                if line.startswith("session_id:"):
+                stripped = line.strip()
+                if stripped == "---":
+                    if not in_fm:
+                        in_fm = True
+                        continue
+                    else:
+                        break
+                if in_fm and line.startswith("session_id:"):
                     existing_sids.add(line.split(":",1)[1].strip())
-                    break
-                if line.strip() == "---" and len(existing_sids) > 0:
                     break
 
     for f in sorted(files, key=os.path.getmtime):
