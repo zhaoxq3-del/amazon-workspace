@@ -1,0 +1,1281 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Amazon US 选品分析记录</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #0f172a;
+    color: #e2e8f0;
+    line-height: 1.6;
+    padding: 0;
+    display: flex;
+    min-height: 100vh;
+  }
+
+  /* Sidebar */
+  .sidebar {
+    width: 220px;
+    min-width: 220px;
+    background: #1e293b;
+    border-right: 1px solid #334155;
+    padding: 20px 0;
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100vh;
+    overflow-y: auto;
+    z-index: 100;
+  }
+  .sidebar-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: #60a5fa;
+    padding: 0 20px 16px;
+    border-bottom: 1px solid #334155;
+    margin-bottom: 8px;
+  }
+  .sidebar-group {
+    padding: 12px 20px 4px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #475569;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .sidebar-item {
+    display: block;
+    padding: 10px 20px;
+    font-size: 13px;
+    color: #94a3b8;
+    cursor: pointer;
+    transition: all 0.15s;
+    border-left: 3px solid transparent;
+  }
+  .sidebar-item:hover {
+    background: #253049;
+    color: #e2e8f0;
+  }
+  .sidebar-item.active {
+    background: #253049;
+    color: #60a5fa;
+    border-left-color: #60a5fa;
+  }
+
+  .main-content {
+    margin-left: 220px;
+    flex: 1;
+    padding: 20px;
+    min-width: 0;
+  }
+  .container { max-width: 1200px; margin: 0 auto; }
+
+  /* Header */
+  .header {
+    text-align: center;
+    padding: 40px 20px;
+    margin-bottom: 30px;
+    background: linear-gradient(135deg, #1e293b, #334155);
+    border-radius: 16px;
+    border: 1px solid #475569;
+    position: relative;
+    overflow: visible;
+  }
+  .header h1 { font-size: 28px; color: #f8fafc; margin-bottom: 8px; }
+  .header p { color: #94a3b8; font-size: 14px; }
+
+  /* 爆单符 stamp */
+  .header-stamp {
+    position: absolute;
+    top: -18px;
+    right: -12px;
+    width: 56px;
+    height: auto;
+    transform: rotate(12deg);
+    filter: drop-shadow(0 4px 12px rgba(0,0,0,0.5));
+    transition: transform 0.3s;
+    z-index: 10;
+  }
+  .header-stamp:hover {
+    transform: rotate(0deg) scale(1.15);
+  }
+
+  /* Stats Bar */
+  .stats-bar {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 30px;
+    flex-wrap: wrap;
+  }
+  .stat-card {
+    flex: 1;
+    min-width: 150px;
+    background: #1e293b;
+    border-radius: 12px;
+    padding: 20px;
+    text-align: center;
+    border: 1px solid #334155;
+  }
+  .stat-card .num { font-size: 32px; font-weight: 700; color: #60a5fa; }
+  .stat-card .label { font-size: 13px; color: #94a3b8; margin-top: 4px; }
+  .stat-card.pass .num { color: #34d399; }
+  .stat-card.fail .num { color: #f87171; }
+  .stat-card.active { outline: 2px solid #60a5fa; outline-offset: -2px; }
+  .stat-card:hover { background: #253049; }
+
+  /* Filter Tabs */
+  .filter-tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+  }
+  .filter-tab {
+    padding: 8px 20px;
+    border-radius: 8px;
+    border: 1px solid #475569;
+    background: #1e293b;
+    color: #94a3b8;
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.2s;
+  }
+  .filter-tab:hover, .filter-tab.active {
+    background: #334155;
+    color: #f8fafc;
+    border-color: #60a5fa;
+  }
+
+  /* Market Card */
+  .market-card {
+    background: #1e293b;
+    border-radius: 16px;
+    border: 1px solid #334155;
+    margin-bottom: 24px;
+    overflow: hidden;
+    transition: transform 0.2s;
+  }
+  .market-card:hover { transform: translateY(-2px); }
+
+  .card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 24px;
+    border-bottom: 1px solid #334155;
+    cursor: pointer;
+  }
+  .card-header:hover { background: #253049; }
+  .card-title-area { display: flex; align-items: center; gap: 16px; }
+  .card-title-area h2 { font-size: 20px; color: #f8fafc; }
+  .card-title-area .category { font-size: 12px; color: #64748b; margin-top: 4px; }
+
+  /* Top1 Product Thumbnail */
+  .top1-thumb {
+    width: 72px;
+    height: 72px;
+    border-radius: 10px;
+    object-fit: cover;
+    border: 2px solid #475569;
+    background: #fff;
+    flex-shrink: 0;
+    transition: transform 0.2s, border-color 0.2s;
+  }
+  .top1-thumb:hover { transform: scale(1.1); border-color: #60a5fa; }
+
+  .verdict {
+    padding: 6px 16px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .verdict.pass { background: #064e3b; color: #34d399; border: 1px solid #065f46; }
+  .verdict.fail { background: #7f1d1d; color: #fca5a5; border: 1px solid #991b1b; }
+  .verdict.caution { background: #78350f; color: #fbbf24; border: 1px solid #92400e; }
+
+  .card-body { padding: 24px; display: none; }
+  .card-body.open { display: block; }
+
+  /* Metrics Grid */
+  .metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+  .metric {
+    background: #0f172a;
+    border-radius: 10px;
+    padding: 14px;
+    border: 1px solid #1e293b;
+  }
+  .metric .val { font-size: 20px; font-weight: 700; color: #f8fafc; }
+  .metric .key { font-size: 12px; color: #64748b; margin-top: 2px; }
+  .metric.good .val { color: #34d399; }
+  .metric.bad .val { color: #f87171; }
+  .metric.warn .val { color: #fbbf24; }
+
+  /* Section Title */
+  .section-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: #cbd5e1;
+    margin: 24px 0 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #334155;
+  }
+
+  /* Analysis Points */
+  .analysis-points { margin-bottom: 20px; }
+  .point {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 8px 0;
+    font-size: 14px;
+    color: #cbd5e1;
+  }
+  .point .icon { font-size: 16px; flex-shrink: 0; margin-top: 2px; }
+  .point.pro .icon { color: #34d399; }
+  .point.con .icon { color: #f87171; }
+
+  /* Table */
+  .data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    margin-bottom: 16px;
+  }
+  .data-table th {
+    background: #0f172a;
+    padding: 10px 12px;
+    text-align: left;
+    color: #94a3b8;
+    font-weight: 600;
+    border-bottom: 2px solid #334155;
+    white-space: nowrap;
+  }
+  .data-table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid #1e293b;
+    color: #cbd5e1;
+  }
+  .data-table tr:hover td { background: #253049; }
+  .data-table .asin-link {
+    color: #60a5fa;
+    text-decoration: none;
+    font-family: monospace;
+  }
+  .data-table .asin-link:hover { text-decoration: underline; }
+  .new-badge {
+    background: #065f46;
+    color: #34d399;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    margin-left: 6px;
+  }
+
+  /* Strategy Box */
+  .strategy-box {
+    background: #172554;
+    border: 1px solid #1e40af;
+    border-radius: 12px;
+    padding: 20px;
+    margin-top: 20px;
+  }
+  .strategy-box h4 { color: #60a5fa; margin-bottom: 10px; font-size: 15px; }
+  .strategy-box p, .strategy-box li {
+    font-size: 14px;
+    color: #93c5fd;
+    margin-bottom: 6px;
+  }
+  .strategy-box ul { padding-left: 20px; }
+
+  /* Date Tag */
+  .date-tag {
+    font-size: 12px;
+    color: #64748b;
+    margin-left: 12px;
+  }
+
+  /* Price highlight */
+  .price-distribution {
+    display: flex;
+    gap: 4px;
+    align-items: flex-end;
+    height: 80px;
+    margin: 16px 0;
+  }
+  .price-bar {
+    flex: 1;
+    background: #334155;
+    border-radius: 4px 4px 0 0;
+    position: relative;
+    min-width: 40px;
+    transition: background 0.2s;
+  }
+  .price-bar:hover { background: #475569; }
+  .price-bar .bar-label {
+    position: absolute;
+    bottom: -20px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 10px;
+    color: #64748b;
+    white-space: nowrap;
+  }
+  .price-bar .bar-val {
+    position: absolute;
+    top: -18px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 10px;
+    color: #94a3b8;
+    white-space: nowrap;
+  }
+  .price-bar.highlight { background: #2563eb; }
+
+  .page-section { display: none; }
+  .page-section.active { display: block; }
+
+  /* Chat Log Styles */
+  .chat-session {
+    background: #1e293b;
+    border-radius: 12px;
+    border: 1px solid #334155;
+    margin-bottom: 20px;
+    overflow: hidden;
+  }
+  .chat-session-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 18px 24px;
+    cursor: pointer;
+    border-bottom: 1px solid #334155;
+  }
+  .chat-session-header:hover { background: #253049; }
+  .chat-session-header h3 { font-size: 16px; color: #f8fafc; }
+  .chat-session-body { padding: 24px; display: none; }
+  .chat-session-body.open { display: block; }
+  .chat-msg {
+    margin-bottom: 16px;
+    padding: 14px 18px;
+    border-radius: 10px;
+    font-size: 14px;
+    line-height: 1.7;
+  }
+  .chat-msg.user {
+    background: #172554;
+    border: 1px solid #1e40af;
+    color: #93c5fd;
+  }
+  .chat-msg.ai {
+    background: #0f172a;
+    border: 1px solid #334155;
+    color: #cbd5e1;
+  }
+  .chat-msg .msg-role {
+    font-size: 12px;
+    font-weight: 700;
+    margin-bottom: 6px;
+    text-transform: uppercase;
+  }
+  .chat-msg.user .msg-role { color: #60a5fa; }
+  .chat-msg.ai .msg-role { color: #34d399; }
+  .chat-summary {
+    font-size: 13px;
+    color: #64748b;
+    margin-left: 12px;
+  }
+  .chat-tag {
+    display: inline-block;
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: #334155;
+    color: #94a3b8;
+    margin-left: 8px;
+  }
+
+  .hero-img {
+    text-align: center;
+    margin-bottom: 24px;
+    padding: 16px;
+    background: #0f172a;
+    border-radius: 10px;
+    border: 1px solid #334155;
+  }
+  .hero-img img { max-height: 260px; border-radius: 8px; }
+  .hero-img .img-caption { font-size: 12px; color: #64748b; margin-top: 8px; }
+  .pain-point-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+  .pain-card {
+    background: #1a1a2e;
+    border: 1px solid #334155;
+    border-radius: 8px;
+    padding: 14px;
+  }
+  .pain-card .pain-title { font-size: 13px; font-weight: 700; color: #f87171; margin-bottom: 6px; }
+  .pain-card .pain-desc { font-size: 12px; color: #94a3b8; line-height: 1.6; }
+  .pain-card .pain-chance { font-size: 11px; color: #34d399; margin-top: 6px; font-weight: 600; }
+  .direction-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+  .direction-card {
+    background: #172554;
+    border: 1px solid #1e40af;
+    border-radius: 8px;
+    padding: 14px;
+  }
+  .direction-card .dir-title { font-size: 14px; font-weight: 700; color: #60a5fa; margin-bottom: 6px; }
+  .direction-card .dir-desc { font-size: 12px; color: #93c5fd; line-height: 1.6; }
+
+  /* Responsive */
+  @media (max-width: 768px) {
+    .metrics-grid { grid-template-columns: repeat(2, 1fr); }
+    .card-header { flex-direction: column; align-items: flex-start; gap: 12px; }
+  }
+
+  /* Expand icon */
+  .expand-icon {
+    color: #64748b;
+    font-size: 20px;
+    transition: transform 0.3s;
+  }
+  .expand-icon.open { transform: rotate(180deg); }
+
+  /* Scrollable table wrapper */
+  .table-wrapper { overflow-x: auto; }
+
+  /* Selection criteria */
+  .criteria-bar {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 30px;
+    padding: 16px 20px;
+    background: #1e293b;
+    border-radius: 12px;
+    border: 1px solid #334155;
+  }
+  .criteria-item {
+    font-size: 13px;
+    padding: 4px 12px;
+    border-radius: 6px;
+    background: #334155;
+    color: #94a3b8;
+  }
+  .criteria-item strong { color: #f8fafc; }
+  /* Knowledge card */
+  .knowledge-card {
+    background: #1e293b;
+    border-radius: 12px;
+    border: 1px solid #334155;
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+  .knowledge-card:hover { border-color: #475569; }
+  .knowledge-card .k-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+  .knowledge-card .k-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: #f8fafc;
+  }
+  .knowledge-card .k-cat {
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 4px;
+    background: #334155;
+    color: #94a3b8;
+  }
+  .knowledge-card .k-content {
+    font-size: 14px;
+    color: #cbd5e1;
+    line-height: 1.8;
+    white-space: pre-line;
+  }
+  .knowledge-card .k-footer {
+    margin-top: 10px;
+    font-size: 12px;
+    color: #64748b;
+  }
+  .filter-tab {
+    padding: 6px 16px;
+    border-radius: 6px;
+    font-size: 13px;
+    color: #94a3b8;
+    background: #1e293b;
+    border: 1px solid #334155;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .filter-tab:hover { border-color: #475569; color: #f8fafc; }
+  .filter-tab.active { background: #0ea5e9; color: #fff; border-color: #0ea5e9; }
+</style>
+</head>
+<body>
+<!-- Sidebar -->
+<div class="sidebar">
+  <div class="sidebar-title">选品看板</div>
+  <div class="sidebar-group">分析面板</div>
+  <div class="sidebar-item active" onclick="switchPage('market', this)">选品分析</div>
+  <div class="sidebar-group">记录</div>
+  <div class="sidebar-item" onclick="switchPage('chatlog', this)">聊天记录</div>
+  <div class="sidebar-item" onclick="switchPage('knowledge', this)">知识库</div>
+</div>
+
+<!-- Main Content -->
+<div class="main-content">
+<div class="container">
+
+  <!-- PAGE: 选品分析 -->
+  <div class="page-section active" id="page-market">
+
+  <div class="header">
+    <img class="header-stamp" src="baodanfu.png" alt="爆单符">
+    <h1>Amazon US 选品分析看板</h1>
+    <p>卖家精灵数据驱动 | 记录每一次市场分析 | 最后更新: 2026-02-24</p>
+  </div>
+
+  <div class="criteria-bar">
+    <div style="width:100%;font-size:15px;font-weight:600;color:#cbd5e1;margin-bottom:8px;">选品标准</div>
+    <div class="criteria-item"><strong>售价</strong> > $15</div>
+    <div class="criteria-item"><strong>利润率</strong> > 50%</div>
+    <div class="criteria-item"><strong>轻小件</strong>优先</div>
+    <div class="criteria-item">不做<strong>季节性</strong>产品</div>
+    <div class="criteria-item">不做<strong>需资质</strong>产品</div>
+    <div class="criteria-item">适合<strong>新手卖家</strong></div>
+  </div>
+
+  <div class="stats-bar">
+    <div class="stat-card active" onclick="filterCards('all', this)" style="cursor:pointer;">
+      <div class="num">4</div>
+      <div class="label">已分析市场</div>
+    </div>
+    <div class="stat-card pass" onclick="filterCards('pass', this)" style="cursor:pointer;">
+      <div class="num">2</div>
+      <div class="label">推荐</div>
+    </div>
+    <div class="stat-card" style="border-color:#92400e;cursor:pointer;" onclick="filterCards('caution', this)">
+      <div class="num" style="color:#fbbf24;">1</div>
+      <div class="label">谨慎选择</div>
+    </div>
+    <div class="stat-card fail" onclick="filterCards('fail', this)" style="cursor:pointer;">
+      <div class="num">1</div>
+      <div class="label">不选择</div>
+    </div>
+  </div>
+
+  <!-- ==================== Market 3: Splash Guards ==================== -->
+  <div class="market-card" data-verdict="pass">
+    <div class="card-header" onclick="toggleCard(this)">
+      <div class="card-title-area">
+        <a href="https://www.amazon.com/dp/B0G1YJDD72" target="_blank" onclick="event.stopPropagation()"><img class="top1-thumb" src="https://m.media-amazon.com/images/I/31Q43ofKvxL._AC_US200_.jpg" alt="首选: B0G1YJDD72" title="首选: B0G1YJDD72 - $26.99 - 月销631 - 41评 - 吸盘式无胶"></a>
+        <div>
+          <h2>Splash Guards (浴缸防溅挡板) <span class="date-tag">2026-02-24</span></h2>
+          <div class="category">Home & Kitchen > Bath > Bathroom Accessories > Bathtub Accessories > Splash Guards</div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;">
+        <div class="verdict pass">推荐</div>
+        <span class="expand-icon">&#9660;</span>
+      </div>
+    </div>
+    <div class="card-body">
+
+      <div class="metrics-grid">
+        <div class="metric good"><div class="val">53.29%</div><div class="key">平均利润率</div></div>
+        <div class="metric"><div class="val">257单</div><div class="key">平均月销量</div></div>
+        <div class="metric"><div class="val">$15-20</div><div class="key">最畅销价格区间</div></div>
+        <div class="metric"><div class="val">305</div><div class="key">平均评论数</div></div>
+        <div class="metric"><div class="val">4.1</div><div class="key">平均评分</div></div>
+        <div class="metric warn"><div class="val">6.2%</div><div class="key">退货率(同类目4.79%)</div></div>
+        <div class="metric good"><div class="val">35%</div><div class="key">新品占比</div></div>
+        <div class="metric good"><div class="val">60</div><div class="key">新品平均评论数</div></div>
+        <div class="metric"><div class="val">4.2</div><div class="key">新品平均评分</div></div>
+        <div class="metric"><div class="val">314,831</div><div class="key">平均BSR</div></div>
+        <div class="metric good"><div class="val">— / 低 / 低</div><div class="key">商品/品牌/卖家集中度</div></div>
+      </div>
+
+      <div class="section-title">推荐理由</div>
+      <div class="analysis-points">
+        <div class="point pro"><span class="icon">&#10003;</span><span><strong>零Amazon自营：</strong>头部TOP10全部是FBA第三方卖家，没有Amazon自营抢Buy Box。</span></div>
+        <div class="point pro"><span class="icon">&#10003;</span><span><strong>评论门槛极低：</strong>B0G1YJDD72 仅41条评论就月销631单($26.99)，B0FKMRQMHK 64条评论月销550单。</span></div>
+        <div class="point pro"><span class="icon">&#10003;</span><span><strong>SPR仅10-13：</strong>每天只需卖1-3单即可冲上搜索首页，推广成本极低。</span></div>
+        <div class="point pro"><span class="icon">&#10003;</span><span><strong>品牌极度分散：</strong>95个品牌/95个卖家，无品牌壁垒。</span></div>
+        <div class="point pro"><span class="icon">&#10003;</span><span><strong>无需任何认证：</strong>硅胶/亚克力浴室配件，不涉及食品、儿童、电气安全。</span></div>
+        <div class="point pro"><span class="icon">&#10003;</span><span><strong>非季节性产品：</strong>浴室防溅是全年刚需，Google Trends无季节波动。</span></div>
+        <div class="point pro"><span class="icon">&#10003;</span><span><strong>供应链简单：</strong>硅胶+亚克力板，模具成本低，1688大量供应商。</span></div>
+      </div>
+
+      <div class="section-title">风险提示</div>
+      <div class="analysis-points">
+        <div class="point con"><span class="icon">&#10007;</span><span><strong>退货率6.2%偏高：</strong>同类目平均4.79%。主因：吸盘/粘胶脱落、尺寸不适配浴缸。需在产品设计上重点解决。</span></div>
+        <div class="point con"><span class="icon">&#10007;</span><span><strong>B0C2GQF2LJ占31%销量：</strong>角落防溅板细分有一定集中度，建议走差异化方向避开。</span></div>
+        <div class="point con"><span class="icon">&#10007;</span><span><strong>B0CPCDHYQN占25%销量：</strong>但这是$59.95的儿童浴缸托盘，与防溅板是不同产品形态，不直接竞争。</span></div>
+      </div>
+
+      <div class="section-title">价格分布</div>
+      <div class="price-distribution">
+        <div class="price-bar" style="height:2%;"><div class="bar-val">1%</div><div class="bar-label">$0-5</div></div>
+        <div class="price-bar" style="height:24%;"><div class="bar-val">16.2%</div><div class="bar-label">$5-10</div></div>
+        <div class="price-bar" style="height:25%;"><div class="bar-val">16.9%</div><div class="bar-label">$10-15</div></div>
+        <div class="price-bar highlight" style="height:100%;"><div class="bar-val">31.7%</div><div class="bar-label">$15-20</div></div>
+        <div class="price-bar" style="height:15%;"><div class="bar-val">10%</div><div class="bar-label">$20-25</div></div>
+        <div class="price-bar" style="height:8%;"><div class="bar-val">5.3%</div><div class="bar-label">$25-30</div></div>
+        <div class="price-bar" style="height:27%;"><div class="bar-val">18.4%</div><div class="bar-label">$35+</div></div>
+      </div>
+      <p style="font-size:12px;color:#64748b;margin-top:24px;margin-bottom:16px;">最优价格带 $15-20（23商品贡献31.7%销量）| $35+由B0CPCDHYQN($59.95儿童托盘)拉高</p>
+
+      <div class="section-title">产品细分方向</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px;">
+        <div style="background:#0f172a;border-radius:10px;padding:16px;border:1px solid #334155;">
+          <div style="font-size:15px;font-weight:700;color:#f8fafc;margin-bottom:6px;">角落防溅板</div>
+          <div style="font-size:12px;color:#94a3b8;margin-bottom:8px;">硅胶底座+亚克力板，自粘式，主流产品</div>
+          <div style="font-size:12px;color:#64748b;">价格带：$13-18 | 竞争：高</div>
+          <div style="margin-top:8px;padding-top:8px;border-top:1px solid #1e3a5f;">
+            <div style="font-size:11px;color:#94a3b8;">参考ASIN:</div>
+            <a href="https://www.amazon.com/dp/B0C2GQF2LJ" target="_blank" style="font-size:12px;color:#38bdf8;text-decoration:none;">B0C2GQF2LJ</a><span style="font-size:11px;color:#64748b;"> $17.99 | 月销4,186 | 1,878评 | 4.5分 | #1</span>
+          </div>
+        </div>
+        <div style="background:#0f172a;border-radius:10px;padding:16px;border:1px solid #0e7490;">
+          <div style="font-size:15px;font-weight:700;color:#22d3ee;margin-bottom:6px;">吸盘式无胶防溅板</div>
+          <div style="font-size:12px;color:#67e8f9;margin-bottom:8px;">全硅胶一体式，吸盘固定不伤墙面，市场新趋势</div>
+          <div style="font-size:12px;color:#64748b;">价格带：$20-27 | 竞争：低</div>
+          <div style="margin-top:8px;padding-top:8px;border-top:1px solid #1e3a5f;">
+            <div style="font-size:11px;color:#94a3b8;">参考ASIN:</div>
+            <a href="https://www.amazon.com/dp/B0G1YJDD72" target="_blank" style="font-size:12px;color:#22d3ee;text-decoration:none;">B0G1YJDD72</a><span style="font-size:11px;color:#64748b;"> $26.99 | 月销631 | 41评 | 4.4分 | 吸盘式</span>
+          </div>
+        </div>
+        <div style="background:#0f172a;border-radius:10px;padding:16px;border:1px solid #334155;">
+          <div style="font-size:15px;font-weight:700;color:#f8fafc;margin-bottom:6px;">淋浴门槛挡水条</div>
+          <div style="font-size:12px;color:#94a3b8;margin-bottom:8px;">折叠式硅胶挡水条，39英寸，干湿分离</div>
+          <div style="font-size:12px;color:#64748b;">价格带：$15-16 | 竞争：中</div>
+          <div style="margin-top:8px;padding-top:8px;border-top:1px solid #1e3a5f;">
+            <div style="font-size:11px;color:#94a3b8;">参考ASIN:</div>
+            <a href="https://www.amazon.com/dp/B0FKMRQMHK" target="_blank" style="font-size:12px;color:#38bdf8;text-decoration:none;">B0FKMRQMHK</a><span style="font-size:11px;color:#64748b;"> $15.99 | 月销550 | 64评 | 4.5分 | +78.2%增长</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="section-title">差评痛点分析 (吸盘式防溅板)</div>
+      <div class="table-wrapper">
+        <table class="data-table">
+          <thead><tr><th>排名</th><th>痛点</th><th>严重度</th><th>差评原文</th><th style="color:#34d399;">你的改进方案</th></tr></thead>
+          <tbody>
+            <tr><td>1</td><td style="color:#f87171;font-weight:600;">吸盘粘不住 / 脱落</td><td style="color:#f87171;">致命</td><td style="font-size:12px;color:#94a3b8;">"suction cups don't hold, kept falling off" "Neither stayed attached for more than a few seconds"</td><td style="font-size:12px;color:#34d399;">TPU吸盘替代橡胶，吸附力>5kg</td></tr>
+            <tr><td>2</td><td style="color:#f87171;font-weight:600;">表面不兼容 (磨砂/石材)</td><td style="color:#f87171;">致命</td><td style="font-size:12px;color:#94a3b8;">"Does not stick to textured surfaces" "avoid frosted, brushed, granular surfaces"</td><td style="font-size:12px;color:#34d399;">主图标注适用表面图示，降低错误购买</td></tr>
+            <tr><td>3</td><td style="color:#f87171;font-weight:600;">不适配弧形浴缸</td><td style="color:#fbbf24;">高</td><td style="font-size:12px;color:#94a3b8;">B0G1YJDD72 标注 "Curved tubs not recommended"，美国大量浴缸是弧形</td><td style="font-size:12px;color:#34d399;">硅胶板加柔韧度，适配轻微弧度</td></tr>
+            <tr><td>4</td><td style="color:#fbbf24;font-weight:600;">密封不严漏水</td><td style="color:#fbbf24;">高</td><td style="font-size:12px;color:#94a3b8;">"water passes through the guard" "doesn't seal properly at the corner"</td><td style="font-size:12px;color:#34d399;">底边加唇边密封条，贴合浴缸面</td></tr>
+            <tr><td>5</td><td style="color:#fbbf24;font-weight:600;">吸盘老化2-3年失效</td><td style="color:#fbbf24;">中</td><td style="font-size:12px;color:#94a3b8;">"after 2-3 years they pop off for no reason" "rubber loses elasticity, becomes brittle"</td><td style="font-size:12px;color:#34d399;">TPU材质天然抗老化，附赠备用吸盘</td></tr>
+            <tr><td>6</td><td style="color:#fbbf24;font-weight:600;">吸盘压在瓷砖缝上</td><td style="color:#fbbf24;">中</td><td style="font-size:12px;color:#94a3b8;">"suction cups must not fall on a grout line — discovered too late"</td><td style="font-size:12px;color:#34d399;">吸盘底座做大(>4cm)，跨缝也能密封</td></tr>
+            <tr><td>7</td><td style="color:#64748b;font-weight:600;">材质薄 / 廉价感</td><td>中</td><td style="font-size:12px;color:#94a3b8;">"very flimsy and cheaply made" "particularly thin"</td><td style="font-size:12px;color:#34d399;">硅胶板厚度升至2-3mm，成本+$0.3</td></tr>
+            <tr><td>8</td><td style="color:#64748b;font-weight:600;">尺寸偏小与预期不符</td><td>低</td><td style="font-size:12px;color:#94a3b8;">买家反馈实际尺寸与预期有差距</td><td style="font-size:12px;color:#34d399;">Listing标注精确尺寸+实物对比图</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div style="background:#172554;border:1px solid #1e40af;border-radius:10px;padding:16px;margin-top:12px;margin-bottom:20px;">
+        <div style="font-size:14px;color:#60a5fa;font-weight:600;margin-bottom:8px;">退货率6.2%的根因：90%差评集中在"吸盘粘不住"</div>
+        <div style="font-size:13px;color:#93c5fd;">改进方案：TPU吸盘(+$0.15/件) + 数量从2-4个增至6个(+$0.2/件) + 大底座设计(模具一次性成本) + 硅胶加厚(+$0.3/件) = 总计增加约 $0.7/件，售价$20-25完全可消化，且直接解决退货主因。</div>
+      </div>
+
+      <div class="section-title">核心流量关键词</div>
+      <div class="table-wrapper">
+        <table class="data-table">
+          <thead><tr><th>关键词</th><th>月搜索量</th><th>商品数</th><th>需供比</th><th>PPC竞价</th><th>SPR</th><th>点击集中度</th></tr></thead>
+          <tbody>
+            <tr><td>sink splash guard</td><td style="color:#38bdf8;font-weight:700;">39,354</td><td>2,913</td><td style="color:#34d399;font-weight:700;">13.51</td><td style="color:#34d399;">$0.44</td><td>20</td><td>25.7%</td></tr>
+            <tr><td>splash guard for bathtub</td><td>16,357</td><td style="color:#34d399;">861</td><td style="color:#34d399;font-weight:700;">19.0</td><td style="color:#fbbf24;">$1.02</td><td style="color:#34d399;font-weight:700;">13</td><td>29.4%</td></tr>
+            <tr><td>shower water guard</td><td>15,252</td><td>2,600</td><td style="color:#34d399;">5.87</td><td style="color:#34d399;">$0.42</td><td style="color:#34d399;font-weight:700;">11</td><td>37.0%</td></tr>
+            <tr><td>bathtub splash guard</td><td>14,598</td><td style="color:#34d399;">831</td><td style="color:#34d399;font-weight:700;">17.57</td><td style="color:#fbbf24;">$1.17</td><td style="color:#34d399;font-weight:700;">10</td><td>39.9%</td></tr>
+            <tr><td>shower splash guard</td><td>13,383</td><td>1,170</td><td style="color:#34d399;">11.44</td><td style="color:#fbbf24;">$1.05</td><td style="color:#34d399;font-weight:700;">13</td><td>33.2%</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p style="font-size:12px;color:#64748b;margin-bottom:16px;">需供比 = 搜索量/商品数，越高需求越强。"splash guard for bathtub" 需供比19.0最高，商品仅861个，蓝海信号强。PPC竞价 $0.42-$1.17，广告成本可控。</p>
+
+      <div class="strategy-box">
+        <h4>入场策略建议</h4>
+        <ul>
+          <li><strong>优先做"吸盘式无胶防溅板"：</strong>参考 B0G1YJDD72，定价 $20-25。核心卖点：不伤墙面、可拆卸重复使用、租房友好 (renter-friendly)。</li>
+          <li><strong>核心关键词：</strong>标题覆盖 splash guard for bathtub / shower splash guard / bathtub splash guard。后台埋 shower water guard / no adhesive splash guard / suction cup splash guard。</li>
+          <li><strong>PPC策略：</strong>初期重点投 "shower water guard"(竞价$0.42, SPR=11) 和 "shower splash guard"($1.05, SPR=13)。</li>
+          <li><strong>产品设计重点：</strong>高品质TPU吸盘(吸附力>5kg)、2-3种尺寸适配不同浴缸、透明设计、附安装说明+视频二维码。解决6.2%退货率问题。</li>
+          <li><strong>首批备货：</strong>500-800个FBA，搭配Vine计划快速积累15-30评论，同步开自动广告测词。</li>
+        </ul>
+      </div>
+
+      <div class="section-title">头部 Top10 商品</div>
+      <div class="table-wrapper">
+        <table class="data-table">
+          <thead><tr><th>排名</th><th>ASIN</th><th>价格</th><th>月销</th><th>增长率</th><th>评论数</th><th>评分</th><th>毛利率</th><th>卖家</th><th>产品类型</th></tr></thead>
+          <tbody>
+            <tr><td>1</td><td><a class="asin-link" href="https://www.amazon.com/dp/B0C2GQF2LJ" target="_blank">B0C2GQF2LJ</a></td><td>$17.99</td><td style="color:#34d399;font-weight:700;">4,186</td><td style="color:#34d399;">+24.3%</td><td>1,878</td><td>4.5</td><td>54.87%</td><td>CN</td><td>角落防溅板</td></tr>
+            <tr><td>2</td><td><a class="asin-link" href="https://www.amazon.com/dp/B0CPCDHYQN" target="_blank">B0CPCDHYQN</a></td><td>$59.95</td><td style="color:#38bdf8;">3,385</td><td style="color:#f87171;">-19.2%</td><td>2,945</td><td>4.6</td><td>46.75%</td><td>US</td><td>儿童浴缸托盘</td></tr>
+            <tr><td>3</td><td><a class="asin-link" href="https://www.amazon.com/dp/B001BVMS2K" target="_blank">B001BVMS2K</a></td><td>$11.99</td><td>978</td><td style="color:#34d399;">+12.5%</td><td>3,426</td><td>4.2</td><td>49.98%</td><td>US</td><td>浴帘防溅夹</td></tr>
+            <tr><td>4</td><td><a class="asin-link" href="https://www.amazon.com/dp/B0CJF2V7HZ" target="_blank">B0CJF2V7HZ</a></td><td>$12.99</td><td>914</td><td style="color:#34d399;">+95.8%</td><td>553</td><td>4.3</td><td>53.21%</td><td>CN</td><td>硅胶+亚克力板</td></tr>
+            <tr style="background:#172554;"><td>5</td><td><a class="asin-link" href="https://www.amazon.com/dp/B0FPLLXP8G" target="_blank">B0FPLLXP8G</a><span class="new-badge">新品</span></td><td>$18.99</td><td>698</td><td style="color:#34d399;">+11.8%</td><td>1,303</td><td>4.2</td><td style="color:#34d399;font-weight:700;">64.41%</td><td>CN</td><td>硅胶透明板</td></tr>
+            <tr style="background:#0c4a6e33;"><td>6</td><td><a class="asin-link" href="https://www.amazon.com/dp/B0G1YJDD72" target="_blank">B0G1YJDD72</a><span class="new-badge">新品</span></td><td style="color:#22d3ee;font-weight:700;">$26.99</td><td style="font-weight:700;">631</td><td style="color:#34d399;font-weight:700;">+31.2%</td><td style="color:#34d399;font-weight:700;">41</td><td>4.4</td><td style="color:#34d399;font-weight:700;">58.88%</td><td>CN</td><td style="color:#22d3ee;">吸盘式无胶</td></tr>
+            <tr><td>7</td><td><a class="asin-link" href="https://www.amazon.com/dp/B0CNS3R51D" target="_blank">B0CNS3R51D</a></td><td>$15.99</td><td>551</td><td style="color:#34d399;">+5.7%</td><td>516</td><td>4.1</td><td>61.99%</td><td>CN</td><td>自粘硅胶板</td></tr>
+            <tr><td>8</td><td><a class="asin-link" href="https://www.amazon.com/dp/B0DCBS28W3" target="_blank">B0DCBS28W3</a></td><td>$23.99</td><td>551</td><td style="color:#34d399;">+14.2%</td><td>430</td><td>4.4</td><td>60.12%</td><td>CN</td><td>儿童浴缸托盘</td></tr>
+            <tr style="background:#0c4a6e33;"><td>9</td><td><a class="asin-link" href="https://www.amazon.com/dp/B0FKMRQMHK" target="_blank">B0FKMRQMHK</a><span class="new-badge">新品</span></td><td>$15.99</td><td>550</td><td style="color:#34d399;font-weight:700;">+78.2%</td><td style="color:#34d399;font-weight:700;">64</td><td>4.5</td><td>58.74%</td><td>CN</td><td style="color:#a78bfa;">淋浴门槛挡水条</td></tr>
+            <tr><td>10</td><td><a class="asin-link" href="https://www.amazon.com/dp/B0BDFP6MWX" target="_blank">B0BDFP6MWX</a></td><td>$14.99</td><td>537</td><td style="color:#34d399;">+1.5%</td><td>409</td><td>4.2</td><td>56.99%</td><td>CN</td><td>硅胶挡水条</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p style="font-size:12px;color:#64748b;">* 青色高亮行 B0G1YJDD72 = 首选参考 (吸盘式无胶, 41评卖631单) | 紫色高亮行 B0FKMRQMHK = 次选参考 (挡水条, +78.2%爆发增长)</p>
+
+    </div>
+  </div>
+
+  <!-- ==================== Market 3: Beeswax Bread Bags ==================== -->
+  <div class="market-card" data-verdict="pass">
+    <div class="card-header" onclick="toggleCard(this)">
+      <div class="card-title-area">
+        <a href="https://www.amazon.com/dp/B0F1CQLJS5" target="_blank" onclick="event.stopPropagation()"><img class="top1-thumb" src="https://images-na.ssl-images-amazon.com/images/I/91SBOqM+nXL._AC_US200_.jpg" alt="标杆: B0F1CQLJS5" title="标杆: B0F1CQLJS5 - $20.89 - 月销11,172 - 4.3分 - BS#1"></a>
+        <div>
+          <h2>Beeswax Bread Bags (蜂蜡面包袋) <span class="date-tag">2026-02-25</span></h2>
+          <div class="category">Home & Kitchen > Kitchen & Dining > Storage & Organization > Travel & To-Go Food Containers > Reusable Produce Bags</div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;">
+        <div class="verdict pass">推荐</div>
+        <span class="expand-icon">&#9660;</span>
+      </div>
+    </div>
+    <div class="card-body">
+
+      <div class="metrics-grid">
+        <div class="metric good"><div class="val">59.88%</div><div class="key">平均利润率</div></div>
+        <div class="metric"><div class="val">975单</div><div class="key">平均月销量</div></div>
+        <div class="metric"><div class="val">$15-30</div><div class="key">最畅销价格区间</div></div>
+        <div class="metric"><div class="val">1,064</div><div class="key">平均评论数</div></div>
+        <div class="metric"><div class="val">4.5</div><div class="key">平均评分</div></div>
+        <div class="metric"><div class="val">—</div><div class="key">退货率</div></div>
+        <div class="metric good"><div class="val">24%</div><div class="key">新品占比</div></div>
+        <div class="metric good"><div class="val">62</div><div class="key">新品平均评论数</div></div>
+        <div class="metric"><div class="val">4.5</div><div class="key">新品平均评分</div></div>
+        <div class="metric"><div class="val">18,810</div><div class="key">平均BSR</div></div>
+        <div class="metric good"><div class="val">— / 25.5% / —</div><div class="key">商品/品牌/卖家集中度</div></div>
+      </div>
+
+      <div class="section-title">推荐理由</div>
+      <div class="analysis-points">
+        <div class="point pro"><span class="icon">&#10003;</span><span><strong>Google Trends爆发增长：</strong>2023年12月热度6 → 2026年2月热度73，一年增长超10倍，需求仍在加速。</span></div>
+        <div class="point pro"><span class="icon">&#10003;</span><span><strong>品牌极度分散：</strong>94个品牌，Top1仅占25.5%，无品牌壁垒。</span></div>
+        <div class="point pro"><span class="icon">&#10003;</span><span><strong>新品友好度极高：</strong>近1年上架产品贡献55.5%总销量，新品均评论仅62条即可站稳。</span></div>
+        <div class="point pro"><span class="icon">&#10003;</span><span><strong>核心词搜索量巨大：</strong>合计超48万/月，点击集中度低(25-37%)，买家愿意浏览更多选择。</span></div>
+        <div class="point pro"><span class="icon">&#10003;</span><span><strong>利润率高、重量轻：</strong>59.88%利润率，0.67磅，FBA费用低，头程成本可控。</span></div>
+        <div class="point pro"><span class="icon">&#10003;</span><span><strong>无需任何认证：</strong>蜂蜡+棉/亚麻材质，不涉及食品、儿童、电气安全认证。</span></div>
+        <div class="point pro"><span class="icon">&#10003;</span><span><strong>供应链简单：</strong>蜂蜡+亚麻/棉布，1688大量供应商，模具成本低。</span></div>
+      </div>
+
+      <div class="section-title">风险提示</div>
+      <div class="analysis-points">
+        <div class="point con"><span class="icon">&#10007;</span><span><strong>市场爆发期竞争加剧：</strong>6-12个月内预计大量卖家涌入，需尽快入场抢占关键词位置。</span></div>
+        <div class="point con"><span class="icon">&#10007;</span><span><strong>品控是核心壁垒：</strong>蜂蜡涂层均匀度、气味是差评主因，品控不过关退货率会很高。</span></div>
+        <div class="point con"><span class="icon">&#10007;</span><span><strong>中国卖家占69%销量：</strong>内卷程度中等，价格战风险存在。</span></div>
+      </div>
+
+      <div class="section-title">价格带分析</div>
+      <div class="price-distribution">
+        <div class="price-bar" style="height:15%"><div class="bar-val">4.5%</div><div class="bar-label">$10-15</div></div>
+        <div class="price-bar highlight" style="height:55%"><div class="bar-val">32.8%</div><div class="bar-label">$15-20</div></div>
+        <div class="price-bar highlight" style="height:80%"><div class="bar-val">44.2%</div><div class="bar-label">$20-30</div></div>
+        <div class="price-bar" style="height:20%"><div class="bar-val">12.5%</div><div class="bar-label">$30-40</div></div>
+        <div class="price-bar" style="height:10%"><div class="bar-val">6.0%</div><div class="bar-label">$40+</div></div>
+      </div>
+      <p style="font-size:12px;color:#64748b;margin-top:24px;margin-bottom:16px;">$15-30 是绝对主力价格带，吃掉77%销量。建议定价 $20-28</p>
+
+      <div class="section-title">核心流量关键词</div>
+      <div class="table-wrapper">
+        <table class="data-table">
+          <thead><tr><th>关键词</th><th>月搜索量</th><th>商品数</th><th>需供比</th><th>购买率</th><th>PPC竞价</th><th>点击集中度</th></tr></thead>
+          <tbody>
+            <tr><td>bread bags</td><td style="color:#38bdf8;font-weight:700;">179,280</td><td>15,748</td><td style="color:#34d399;">11.38</td><td>7.46%</td><td style="color:#34d399;">$0.94</td><td>27.9%</td></tr>
+            <tr><td>bread bags for homemade bread</td><td style="color:#38bdf8;">132,087</td><td>3,832</td><td style="color:#34d399;font-weight:700;">34.47</td><td>6.58%</td><td style="color:#fbbf24;">$1.22</td><td>25.7%</td></tr>
+            <tr><td>beeswax bread bag</td><td style="color:#38bdf8;">120,888</td><td style="color:#34d399;font-weight:700;">1,097</td><td style="color:#34d399;font-weight:700;">110.2</td><td>3.31%</td><td style="color:#fbbf24;">$1.23</td><td>37.3%</td></tr>
+            <tr><td>sourdough bread bags</td><td>104,778</td><td>2,416</td><td style="color:#34d399;font-weight:700;">43.37</td><td>7.90%</td><td style="color:#34d399;">$0.86</td><td>34.8%</td></tr>
+            <tr><td>beeswax bread bags for sourdough</td><td>49,417</td><td style="color:#34d399;font-weight:700;">1,072</td><td style="color:#34d399;font-weight:700;">46.1</td><td>4.16%</td><td style="color:#34d399;">—</td><td>31.6%</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p style="font-size:12px;color:#64748b;margin-bottom:16px;">需供比 = 搜索量/商品数，越高说明需求越强、供给越不足。"beeswax bread bag" 需供比高达110.2，需求远超供给，蓝海信号极强。PPC竞价 $0.86-$1.23，广告成本中等。</p>
+
+      <div class="section-title">差评痛点分析</div>
+      <div class="table-wrapper">
+        <table class="data-table">
+          <thead><tr><th>排名</th><th>痛点</th><th>严重度</th><th>典型差评方向</th><th style="color:#34d399;">改进方案</th></tr></thead>
+          <tbody>
+            <tr><td>1</td><td style="color:#f87171;font-weight:600;">蜂蜡气味刺鼻</td><td style="color:#f87171;">致命</td><td style="font-size:12px;color:#94a3b8;">收到后有强烈蜂蜡/化学气味，需晾晒数天才能使用</td><td style="font-size:12px;color:#34d399;">食品级精炼蜂蜡+天然植物精油中和气味</td></tr>
+            <tr><td>2</td><td style="color:#f87171;font-weight:600;">涂层不均匀/脱落</td><td style="color:#f87171;">致命</td><td style="font-size:12px;color:#94a3b8;">蜂蜡涂层厚薄不一，使用几次后掉渣沾面包</td><td style="font-size:12px;color:#34d399;">多次薄涂工艺，确保均匀附着</td></tr>
+            <tr><td>3</td><td style="color:#f87171;font-weight:600;">封口设计差</td><td style="color:#fbbf24;">高</td><td style="font-size:12px;color:#94a3b8;">绑绳/纽扣封口不紧密，面包一天内变干变硬</td><td style="font-size:12px;color:#34d399;">拉链+折叠双重封口（B0FS1YH17C已验证）</td></tr>
+            <tr><td>4</td><td style="color:#fbbf24;font-weight:600;">尺寸偏小</td><td style="color:#fbbf24;">高</td><td style="font-size:12px;color:#94a3b8;">装不下标准酸面团面包，开口太窄不方便</td><td style="font-size:12px;color:#34d399;">大号款适配10寸面包，加宽开口设计</td></tr>
+            <tr><td>5</td><td style="color:#fbbf24;font-weight:600;">清洗困难</td><td style="color:#fbbf24;">中</td><td style="font-size:12px;color:#94a3b8;">蜂蜡遇热水融化，只能冷水擦拭，易发霉</td><td style="font-size:12px;color:#34d399;">内衬可拆卸设计，或提供备用内衬替换</td></tr>
+            <tr><td>6</td><td style="color:#64748b;font-weight:600;">耐用性不足</td><td>中</td><td style="font-size:12px;color:#94a3b8;">使用1-2月后蜂蜡层磨损，保鲜效果下降</td><td style="font-size:12px;color:#34d399;">附赠蜂蜡修复棒，延长寿命(+复购触点)</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div style="background:#172554;border:1px solid #1e40af;border-radius:10px;padding:16px;margin-top:12px;margin-bottom:20px;">
+        <div style="font-size:14px;color:#60a5fa;font-weight:600;margin-bottom:8px;">差评核心根因：90%集中在"气味+涂层+封口"三大问题</div>
+        <div style="font-size:13px;color:#93c5fd;">核心改进：精炼蜂蜡(去异味) + 多次薄涂工艺(涂层均匀) + 拉链封口(保鲜)。三项改进直接解决90%差评根因，具体成本需与供应商确认。</div>
+      </div>
+
+      <div class="section-title">产品细分方向</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px;">
+        <div style="background:#0f172a;border-radius:10px;padding:16px;border:1px solid #0e7490;">
+          <div style="font-size:15px;font-weight:700;color:#22d3ee;margin-bottom:6px;">拉链密封款</div>
+          <div style="font-size:12px;color:#67e8f9;margin-bottom:8px;">拉链+蜂蜡组合，解决封口痛点，目前仅2-3家在做，先发优势明显</div>
+          <div style="font-size:12px;color:#64748b;">价格带：$25-28 | 竞争：极低</div>
+          <div style="margin-top:8px;padding-top:8px;border-top:1px solid #1e3a5f;">
+            <div style="font-size:11px;color:#94a3b8;">参考ASIN:</div>
+            <a href="https://www.amazon.com/dp/B0FS1YH17C" target="_blank" style="font-size:12px;color:#22d3ee;text-decoration:none;">B0FS1YH17C</a><span style="font-size:11px;color:#64748b;"> $27.87 | 月销2,236 | 89评 | 4.8分 | 拉链封口</span>
+          </div>
+        </div>
+        <div style="background:#0f172a;border-radius:10px;padding:16px;border:1px solid #334155;">
+          <div style="font-size:15px;font-weight:700;color:#f8fafc;margin-bottom:6px;">多尺寸套装</div>
+          <div style="font-size:12px;color:#94a3b8;margin-bottom:8px;">S/M/L三件套，覆盖法棍、吐司、酸面团，解决尺寸痛点，提高客单价</div>
+          <div style="font-size:12px;color:#64748b;">价格带：$22-26 | 竞争：低</div>
+          <div style="margin-top:8px;padding-top:8px;border-top:1px solid #1e3a5f;">
+            <div style="font-size:11px;color:#94a3b8;">参考ASIN (5变体策略):</div>
+            <a href="https://www.amazon.com/dp/B0F1CQLJS5" target="_blank" style="font-size:12px;color:#38bdf8;text-decoration:none;">B0F1CQLJS5</a><span style="font-size:11px;color:#64748b;"> $20.89 | 月销11,172 | 465评 | BS#1 | 5变体</span>
+          </div>
+        </div>
+        <div style="background:#0f172a;border-radius:10px;padding:16px;border:1px solid #334155;">
+          <div style="font-size:15px;font-weight:700;color:#f8fafc;margin-bottom:6px;">酸面团专用款</div>
+          <div style="font-size:12px;color:#94a3b8;margin-bottom:8px;">针对sourdough词(月搜10.4万)垂直细分，加大尺寸、XL棉内衬设计</div>
+          <div style="font-size:12px;color:#64748b;">价格带：$20-25 | 竞争：低</div>
+          <div style="margin-top:8px;padding-top:8px;border-top:1px solid #1e3a5f;">
+            <div style="font-size:11px;color:#94a3b8;">参考ASIN:</div>
+            <a href="https://www.amazon.com/dp/B0F3V3S7WG" target="_blank" style="font-size:12px;color:#38bdf8;text-decoration:none;">B0F3V3S7WG</a><span style="font-size:11px;color:#64748b;"> $19.79 | 月销7,221 | 382评 | 4.5分 | XL棉内衬</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="section-title">头部 Top10 商品</div>
+      <div class="table-wrapper">
+        <table class="data-table">
+          <thead><tr><th>排名</th><th>ASIN</th><th>价格</th><th>月销</th><th>增长率</th><th>评论数</th><th>评分</th><th>毛利率</th><th>卖家</th><th>产品类型</th></tr></thead>
+          <tbody>
+            <tr><td>1</td><td><a class="asin-link" href="https://www.amazon.com/dp/B0F1CQLJS5" target="_blank">B0F1CQLJS5</a><span class="new-badge">BS#1</span></td><td>$20.89</td><td style="color:#34d399;font-weight:700;">11,172</td><td style="color:#34d399;font-weight:700;">+149%</td><td>465</td><td>4.3</td><td>64.9%</td><td>CN</td><td>基础蜂蜡袋(2pack)</td></tr>
+            <tr><td>2</td><td><a class="asin-link" href="https://www.amazon.com/dp/B0F3V3S7WG" target="_blank">B0F3V3S7WG</a><span class="new-badge">新品</span></td><td>$19.79</td><td style="color:#34d399;">7,221</td><td style="color:#34d399;">+44%</td><td>382</td><td>4.5</td><td>64.1%</td><td>CN</td><td>棉内衬蜂蜡袋(2pack)</td></tr>
+            <tr style="background:#0c4a6e33;"><td>6</td><td><a class="asin-link" href="https://www.amazon.com/dp/B0FS1YH17C" target="_blank">B0FS1YH17C</a><span class="new-badge">新品</span></td><td style="color:#22d3ee;">$27.87</td><td>2,236</td><td style="color:#34d399;font-weight:700;">+325%</td><td style="color:#34d399;font-weight:700;">89</td><td style="color:#34d399;">4.8</td><td style="color:#34d399;font-weight:700;">69.9%</td><td>CN</td><td style="color:#22d3ee;">拉链密封款(2pack)</td></tr>
+            <tr style="background:#0c4a6e33;"><td>7</td><td><a class="asin-link" href="https://www.amazon.com/dp/B0FB8HPRHG" target="_blank">B0FB8HPRHG</a><span class="new-badge">新品</span></td><td>$20.75</td><td>2,195</td><td style="color:#34d399;font-weight:700;">+311%</td><td style="color:#34d399;font-weight:700;">68</td><td>4.5</td><td>65.1%</td><td>CN</td><td style="color:#a78bfa;">基础蜂蜡袋(多色)</td></tr>
+            <tr><td>8</td><td><a class="asin-link" href="https://www.amazon.com/dp/B0F37M8KN1" target="_blank">B0F37M8KN1</a></td><td>$29.99</td><td>1,747</td><td style="color:#f87171;">-13%</td><td>306</td><td>4.6</td><td>71.0%</td><td>CN</td><td>高端蜂蜡袋(2pack)</td></tr>
+            <tr><td>9</td><td><a class="asin-link" href="https://www.amazon.com/dp/B0CRQQ1FQ9" target="_blank">B0CRQQ1FQ9</a></td><td>$34.99</td><td>1,930</td><td style="color:#f87171;">-15%</td><td>470</td><td>4.3</td><td>72.1%</td><td>US</td><td>高端蜂蜡袋(单pack)</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p style="font-size:12px;color:#64748b;">* 青色高亮 B0FS1YH17C = 首选参考 (拉链密封款, 89评+325%增长) | 紫色高亮 B0FB8HPRHG = 次选参考 (68评+311%增长) | 排名3-5为非蜂蜡产品已过滤</p>
+
+      <div class="strategy-box">
+        <h4>入场策略建议</h4>
+        <ul>
+          <li><strong>优先做"拉链密封款"：</strong>参考 B0FS1YH17C，定价 $25-28。核心卖点：拉链密封保鲜、天然蜂蜡、环保可重复使用。</li>
+          <li><strong>核心关键词：</strong>标题覆盖 beeswax bread bag / bread bags for homemade bread / sourdough bread bags。后台埋 beeswax bread bags for sourdough / reusable bread bag。</li>
+          <li><strong>PPC策略：</strong>初期重点投 "sourdough bread bags"(竞价$0.86) 和 "bread bags"($0.94)，性价比最高。"beeswax bread bag"($1.23)精准但供需比高，中期再加。</li>
+          <li><strong>产品设计重点：</strong>精炼蜂蜡无异味(+$0.3) + 拉链封口(+$0.5) + 大号适配10寸面包 + 附赠蜂蜡修复棒。解决90%差评根因。</li>
+          <li><strong>首批备货：</strong>500-800个FBA，搭配Vine计划快速积累15-30评论，同步开自动广告测词。</li>
+        </ul>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ==================== Market 2: Cake Pop Molds ==================== -->
+  <div class="market-card" data-verdict="caution">
+    <div class="card-header" onclick="toggleCard(this)">
+      <div class="card-title-area">
+        <a href="https://www.amazon.com/dp/B0FPLYMBMM" target="_blank" onclick="event.stopPropagation()"><img class="top1-thumb" src="https://m.media-amazon.com/images/I/415BgyNizHL._AC_US200_.jpg" alt="首选: B0FPLYMBMM" title="首选: B0FPLYMBMM - $18.99 - 月销556 - 4.8分"></a>
+        <div>
+          <h2>Cake Pop Molds (蛋糕棒棒糖模具) <span class="date-tag">2026-02-24</span></h2>
+          <div class="category">Home & Kitchen > Kitchen & Dining > Bakeware > Pastry & Baking Molds > Cake Pop Molds</div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;">
+        <div class="verdict caution">谨慎选择</div>
+        <span class="expand-icon">&#9660;</span>
+      </div>
+    </div>
+    <div class="card-body">
+
+      <div class="metrics-grid">
+        <div class="metric warn"><div class="val">50.36%</div><div class="key">平均利润率</div></div>
+        <div class="metric"><div class="val">666单</div><div class="key">平均月销量</div></div>
+        <div class="metric"><div class="val">$10-15</div><div class="key">最畅销价格区间</div></div>
+        <div class="metric"><div class="val">1,505</div><div class="key">平均评论数</div></div>
+        <div class="metric"><div class="val">4.4</div><div class="key">平均评分</div></div>
+        <div class="metric"><div class="val">—</div><div class="key">退货率</div></div>
+        <div class="metric good"><div class="val">43%</div><div class="key">新品占比</div></div>
+        <div class="metric good"><div class="val">32</div><div class="key">新品平均评论数</div></div>
+        <div class="metric"><div class="val">4.3</div><div class="key">新品平均评分</div></div>
+        <div class="metric"><div class="val">156,123</div><div class="key">平均BSR</div></div>
+        <div class="metric"><div class="val">— / — / —</div><div class="key">商品/品牌/卖家集中度</div></div>
+      </div>
+
+      <div class="section-title">优势分析</div>
+      <div class="analysis-points">
+        <div class="point pro"><span class="icon">&#10003;</span><span><strong>新品友好度极高：</strong>新品占43%，拿走50%销量。Top3商品全是新品，市场格局未定。</span></div>
+        <div class="point pro"><span class="icon">&#10003;</span><span><strong>评论门槛极低：</strong>1-50条评论的商品拿走37.4%销量。不需要堆评论。</span></div>
+        <div class="point pro"><span class="icon">&#10003;</span><span><strong>轻小件：</strong>平均282g，头程和FBA费用可控。</span></div>
+        <div class="point pro"><span class="icon">&#10003;</span><span><strong>无品牌壁垒：</strong>头部品牌自己就是新入场的，新玩家有机会。</span></div>
+        <div class="point pro"><span class="icon">&#10003;</span><span><strong>无资质要求：</strong>厨房烘焙模具，不需要特殊认证。</span></div>
+      </div>
+
+      <div class="section-title">风险提示</div>
+      <div class="analysis-points">
+        <div class="point con"><span class="icon">&#10007;</span><span><strong>主力价格偏低：</strong>平均 $13.63，44% 销量在 $5-10。需走套装路线拉高售价。</span></div>
+        <div class="point con"><span class="icon">&#10007;</span><span><strong>利润率刚踩线：</strong>50.36%，需严格控制 FOB 成本在 $3-4 以内。</span></div>
+        <div class="point con"><span class="icon">&#10007;</span><span><strong>中国卖家93%：</strong>竞争激烈，但也说明供应链优势在中国。</span></div>
+      </div>
+
+      <div class="section-title">价格分布</div>
+      <div class="price-distribution">
+        <div class="price-bar" style="height:2%;"><div class="bar-val">0.2%</div><div class="bar-label">$0-5</div></div>
+        <div class="price-bar highlight" style="height:100%;"><div class="bar-val">44.3%</div><div class="bar-label">$5-10</div></div>
+        <div class="price-bar" style="height:86%;"><div class="bar-val">38.1%</div><div class="bar-label">$10-15</div></div>
+        <div class="price-bar" style="height:27%;"><div class="bar-val">11.8%</div><div class="bar-label">$15-20</div></div>
+        <div class="price-bar" style="height:9%;"><div class="bar-val">3.8%</div><div class="bar-label">$20+</div></div>
+      </div>
+      <p style="font-size:12px;color:#64748b;margin-top:24px;margin-bottom:16px;">$15-20 区间有 17 个商品、2,737 单/月，套装路线可行</p>
+
+      <div class="section-title">产品细分方向</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px;">
+        <div style="background:#0f172a;border-radius:10px;padding:16px;border:1px solid #334155;">
+          <div style="font-size:15px;font-weight:700;color:#f8fafc;margin-bottom:6px;">单品硅胶模具</div>
+          <div style="font-size:12px;color:#94a3b8;margin-bottom:8px;">单个圆形/心形模具，基础款，占市场主流</div>
+          <div style="font-size:12px;color:#64748b;">价格带：$7-13 | 竞争：高 | 利润薄</div>
+        </div>
+        <div style="background:#0f172a;border-radius:10px;padding:16px;border:1px solid #0e7490;">
+          <div style="font-size:15px;font-weight:700;color:#22d3ee;margin-bottom:6px;">一站式套装 (推荐)</div>
+          <div style="font-size:12px;color:#67e8f9;margin-bottom:8px;">模具+棒棒棍+包装袋+扎带，一站式套装</div>
+          <div style="font-size:12px;color:#64748b;">价格带：$16-19 | 竞争：低 | 高利润</div>
+          <div style="margin-top:8px;padding-top:8px;border-top:1px solid #1e3a5f;">
+            <div style="font-size:11px;color:#94a3b8;">参考ASIN:</div>
+            <a href="https://www.amazon.com/dp/B0FPLYMBMM" target="_blank" style="font-size:12px;color:#22d3ee;text-decoration:none;">B0FPLYMBMM</a><span style="font-size:11px;color:#64748b;"> $18.99 | 月销556 | 4.8分 | 套装标杆</span>
+          </div>
+        </div>
+        <div style="background:#0f172a;border-radius:10px;padding:16px;border:1px solid #334155;">
+          <div style="font-size:15px;font-weight:700;color:#f8fafc;margin-bottom:6px;">特殊形状模具</div>
+          <div style="font-size:12px;color:#94a3b8;margin-bottom:8px;">心形/动物/节日主题，差异化切入，heart cake pop mold SPR仅5</div>
+          <div style="font-size:12px;color:#64748b;">价格带：$10-15 | 竞争：中 | 季节性波动</div>
+        </div>
+      </div>
+
+      <div class="section-title">差评痛点分析 (同类套装产品)</div>
+      <div class="table-wrapper">
+        <table class="data-table">
+          <thead><tr><th>痛点类型</th><th>问题描述</th><th>频率</th><th>差评原文</th><th style="color:#34d399;">你的改进方案</th></tr></thead>
+          <tbody>
+            <tr><td style="color:#f87171;font-weight:600;">模具设计</td><td>蛋糕球不成完整圆球</td><td style="color:#f87171;">极高频</td><td style="font-size:12px;color:#94a3b8;">"no matter how much batter, it never makes a complete circle"</td><td style="font-size:12px;color:#34d399;">优化模腔弧度，标注精确面糊用量</td></tr>
+            <tr><td style="color:#f87171;font-weight:600;">模具设计</td><td>两半模具无法锁紧，面糊撑开</td><td style="color:#f87171;">高频</td><td style="font-size:12px;color:#94a3b8;">"nothing locking the top and bottom together"</td><td style="font-size:12px;color:#34d399;">加卡扣/对齐销钉，核心差异化</td></tr>
+            <tr><td style="color:#f87171;font-weight:600;">脱模问题</td><td>脱模时断裂成两半</td><td style="color:#f87171;">高频</td><td style="font-size:12px;color:#94a3b8;">"try to break them out, they just break in half"</td><td style="font-size:12px;color:#34d399;">说明书标注冷却时间+脱模技巧</td></tr>
+            <tr><td style="color:#fbbf24;font-weight:600;">烘烤问题</td><td>烘烤不均匀，中间生边缘焦</td><td style="color:#fbbf24;">高频</td><td style="font-size:12px;color:#94a3b8;">"inside cups underdone, outside cups almost burnt"</td><td style="font-size:12px;color:#34d399;">说明卡标注推荐温度325°F/18min</td></tr>
+            <tr><td style="color:#fbbf24;font-weight:600;">粘模</td><td>号称不粘实际必须喷油</td><td style="color:#fbbf24;">中频</td><td style="font-size:12px;color:#94a3b8;">"did not release from the pan, would not purchase again"</td><td style="font-size:12px;color:#34d399;">别标"不粘"，改为"轻喷油即脱模"</td></tr>
+            <tr><td style="color:#fbbf24;font-weight:600;">配件质量</td><td>纸棍一次就烂，蛋糕球挂不住</td><td style="color:#fbbf24;">中频</td><td style="font-size:12px;color:#94a3b8;">"sticks made with paper, fell apart after one use"</td><td style="font-size:12px;color:#34d399;">升级食品级塑料棍或加粗纸棍</td></tr>
+            <tr><td style="color:#fbbf24;font-weight:600;">蘸涂开裂</td><td>蘸巧克力后外壳开裂</td><td style="color:#fbbf24;">中频</td><td style="font-size:12px;color:#94a3b8;">"cracking caused by temperature difference of coating and cake ball"</td><td style="font-size:12px;color:#34d399;">说明卡标注室温回温+蘸涂温度</td></tr>
+            <tr><td style="color:#64748b;font-weight:600;">使用体验</td><td>无使用说明，新手完全不会用</td><td style="color:#f87171;">高频</td><td style="font-size:12px;color:#94a3b8;">"very disappointed, no instructions for use"</td><td style="font-size:12px;color:#34d399;">附说明卡+视频二维码，核心卖点</td></tr>
+            <tr><td style="color:#64748b;font-weight:600;">材质问题</td><td>硅胶异味导致蛋糕不能吃</td><td>低频</td><td style="font-size:12px;color:#94a3b8;">"smell and taste strange, unservable"</td><td style="font-size:12px;color:#34d399;">Listing强调FDA/BPA-free/无异味</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div style="background:#172554;border:1px solid #1e40af;border-radius:10px;padding:16px;margin-top:12px;margin-bottom:20px;">
+        <div style="font-size:14px;color:#60a5fa;font-weight:600;margin-bottom:8px;">改进成本评估：极低</div>
+        <div style="font-size:13px;color:#93c5fd;">模具加卡扣 + 印刷说明卡 + 升级棍材质，总计增加成本极低，但可直接拉高评分、降低退货率、拉开与竞品差距。具体成本需与供应商确认。</div>
+      </div>
+
+      <div class="section-title">核心流量关键词</div>
+      <div class="table-wrapper">
+        <table class="data-table">
+          <thead><tr><th>关键词</th><th>月搜索量</th><th>商品数</th><th>PPC竞价</th><th>SPR</th><th>点击集中度</th></tr></thead>
+          <tbody>
+            <tr><td>cake pop mold</td><td style="color:#38bdf8;font-weight:700;">93,997</td><td>6,908</td><td style="color:#34d399;">$0.52</td><td>76</td><td>28.3%</td></tr>
+            <tr><td>cake pop sticks</td><td style="color:#38bdf8;">89,070</td><td>5,316</td><td style="color:#34d399;">$0.76</td><td>192</td><td>38.2%</td></tr>
+            <tr><td>cake pop molds</td><td>31,460</td><td>6,898</td><td style="color:#34d399;">$0.52</td><td style="color:#34d399;font-weight:700;">21</td><td>29.5%</td></tr>
+            <tr><td>cake pop kit</td><td>26,409</td><td>1,450</td><td style="color:#fbbf24;">$1.14</td><td style="color:#34d399;font-weight:700;">21</td><td>35.6%</td></tr>
+            <tr><td>cake pop</td><td>24,924</td><td>18,323</td><td style="color:#34d399;">$0.51</td><td style="color:#34d399;font-weight:700;">18</td><td>28.5%</td></tr>
+            <tr><td>heart cake pop mold</td><td>19,987</td><td>1,552</td><td style="color:#34d399;">$0.53</td><td style="color:#34d399;font-weight:700;">5</td><td>33.9%</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p style="font-size:12px;color:#64748b;margin-bottom:16px;">SPR 5-21 = 每天卖1-3单即可上首页 | PPC竞价 $0.51-$1.14，广告成本极低 | "cake pop kit" 套装词竞品仅1,450个，蓝海词</p>
+
+      <div class="strategy-box">
+        <h4>入场策略建议</h4>
+        <ul>
+          <li><strong>产品形态：</strong>模具(2-3种形状) + 托盘 + 棒棒棍(100根) + 包装袋(100个) + 扎带 → 一站式套装</li>
+          <li><strong>定价区间：</strong>$16.99 - $18.99</li>
+          <li><strong>成本控制：</strong>FOB 成本需 < $3-4，确保利润率 > 50%</li>
+          <li><strong>对标 ASIN：</strong>B0FPLYMBMM（高价套装路线）、B0FN7R9M2J（爆量路线）</li>
+          <li><strong>差异化方向：</strong>更多形状模具、更好包装设计、附赠食谱卡</li>
+        </ul>
+      </div>
+
+      <div class="section-title">头部 Top10 商品</div>
+      <div class="table-wrapper">
+        <table class="data-table">
+          <thead><tr><th>排名</th><th>ASIN</th><th>价格</th><th>月销</th><th>评论数</th><th>评分</th><th>上架时间</th><th>销量占比</th></tr></thead>
+          <tbody>
+            <tr><td>1</td><td><a class="asin-link" href="https://www.amazon.com/dp/B0FN7R9M2J" target="_blank">B0FN7R9M2J</a><span class="new-badge">新品</span></td><td>$12.99</td><td>4,657</td><td>188</td><td>4.2</td><td>2025-09</td><td>42.3%</td></tr>
+            <tr><td>2</td><td><a class="asin-link" href="https://www.amazon.com/dp/B0FHJ1MRFD" target="_blank">B0FHJ1MRFD</a><span class="new-badge">新品</span></td><td>$9.99</td><td>1,450</td><td>241</td><td>4.6</td><td>2025-09</td><td>13.2%</td></tr>
+            <tr><td>3</td><td><a class="asin-link" href="https://www.amazon.com/dp/B0FWKQPPCG" target="_blank">B0FWKQPPCG</a><span class="new-badge">新品</span></td><td>$9.99</td><td>835</td><td>46</td><td>4.0</td><td>2025-11</td><td>7.6%</td></tr>
+            <tr><td>4</td><td><a class="asin-link" href="https://www.amazon.com/dp/B0F1TGVHMQ" target="_blank">B0F1TGVHMQ</a></td><td>$7.99</td><td>665</td><td>240</td><td>4.6</td><td>2025-04</td><td>6.0%</td></tr>
+            <tr><td>5</td><td><a class="asin-link" href="https://www.amazon.com/dp/B0FY5GTYV3" target="_blank">B0FY5GTYV3</a><span class="new-badge">新品</span></td><td>$9.99</td><td>653</td><td>42</td><td>3.7</td><td>2025-10</td><td>5.9%</td></tr>
+            <tr><td>6</td><td><a class="asin-link" href="https://www.amazon.com/dp/B07ZKKKNXL" target="_blank">B07ZKKKNXL</a></td><td>$13.99</td><td>651</td><td>5,823</td><td>4.3</td><td>2019-11</td><td>5.9%</td></tr>
+            <tr><td>7</td><td><a class="asin-link" href="https://www.amazon.com/dp/B0FCG76JH7" target="_blank">B0FCG76JH7</a></td><td>$7.99</td><td>564</td><td>174</td><td>4.5</td><td>2025-07</td><td>5.1%</td></tr>
+            <tr style="background:#172554;"><td>8</td><td><a class="asin-link" href="https://www.amazon.com/dp/B0FPLYMBMM" target="_blank">B0FPLYMBMM</a><span class="new-badge">新品</span></td><td style="color:#fbbf24;font-weight:700;">$18.99</td><td>556</td><td>38</td><td style="color:#34d399;">4.8</td><td>2025-11</td><td>5.1%</td></tr>
+            <tr><td>9</td><td><a class="asin-link" href="https://www.amazon.com/dp/B0F6CPSW6B" target="_blank">B0F6CPSW6B</a></td><td>$12.99</td><td>511</td><td>205</td><td>4.1</td><td>2025-05</td><td>4.7%</td></tr>
+            <tr><td>10</td><td><a class="asin-link" href="https://www.amazon.com/dp/B0DSPF8L4Z" target="_blank">B0DSPF8L4Z</a></td><td>$7.99</td><td>459</td><td>308</td><td>4.4</td><td>2025-01</td><td>4.2%</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p style="font-size:12px;color:#64748b;">* 蓝色高亮行 B0FPLYMBMM 为套装高价标杆（$18.99 / 38评论 / 4.8分），值得重点研究</p>
+
+    </div>
+  </div>
+
+  <!-- ==================== Market 1: Egg Separators ==================== -->
+  <div class="market-card" data-verdict="fail">
+    <div class="card-header" onclick="toggleCard(this)">
+      <div class="card-title-area">
+        <a href="https://www.amazon.com/dp/B085ZTGGTJ" target="_blank" onclick="event.stopPropagation()"><img class="top1-thumb" src="https://images-na.ssl-images-amazon.com/images/I/61L2ivwYQnL._AC_US200_.jpg" alt="Top1: B085ZTGGTJ" title="Top1: B085ZTGGTJ - $11.99 - 月销8,129"></a>
+        <div>
+          <h2>Egg Separators (蛋清分离器) <span class="date-tag">2026-02-24</span></h2>
+          <div class="category">Home & Kitchen > Kitchen & Dining > Kitchen Utensils & Gadgets > Specialty Tools & Gadgets > Egg Separators</div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;">
+        <div class="verdict fail">不选择</div>
+        <span class="expand-icon">&#9660;</span>
+      </div>
+    </div>
+    <div class="card-body">
+
+      <div class="metrics-grid">
+        <div class="metric warn"><div class="val">53.73%</div><div class="key">平均利润率</div></div>
+        <div class="metric"><div class="val">444单</div><div class="key">平均月销量</div></div>
+        <div class="metric"><div class="val">$5-10</div><div class="key">最畅销价格区间</div></div>
+        <div class="metric bad"><div class="val">648</div><div class="key">平均评论数</div></div>
+        <div class="metric"><div class="val">3.5</div><div class="key">平均评分</div></div>
+        <div class="metric"><div class="val">—</div><div class="key">退货率</div></div>
+        <div class="metric"><div class="val">36%</div><div class="key">新品占比</div></div>
+        <div class="metric"><div class="val">—</div><div class="key">新品平均评论数</div></div>
+        <div class="metric"><div class="val">—</div><div class="key">新品平均评分</div></div>
+        <div class="metric"><div class="val">—</div><div class="key">平均BSR</div></div>
+        <div class="metric bad"><div class="val">61% / 51% / 85%</div><div class="key">商品/品牌/卖家集中度</div></div>
+      </div>
+
+      <div class="section-title">不推荐理由</div>
+      <div class="analysis-points">
+        <div class="point con"><span class="icon">&#10007;</span><span><strong>售价太低：</strong>平均 $10.27，67% 销量在 $5-10 区间。$15 以上商品仅占 4.3% 销量，买家不愿为蛋清分离器花 $15+。</span></div>
+        <div class="point con"><span class="icon">&#10007;</span><span><strong>头部垄断严重：</strong>Top1 品牌吃掉 51% 销售额，两个 ASIN 拿走 47% 销量。</span></div>
+        <div class="point con"><span class="icon">&#10007;</span><span><strong>中国卖家红海：</strong>85% 中国卖家，价格内卷严重。</span></div>
+        <div class="point con"><span class="icon">&#10007;</span><span><strong>老品主导：</strong>3年以上老品占 58.7% 销量，新品难出头。</span></div>
+        <div class="point con"><span class="icon">&#10007;</span><span><strong>绝对利润太低：</strong>售价 $10 × 53% = 单件毛利 $5，扣完广告基本不赚钱。</span></div>
+      </div>
+
+      <div class="section-title">价格分布</div>
+      <div class="price-distribution">
+        <div class="price-bar" style="height:5%;"><div class="bar-val">2.2%</div><div class="bar-label">$0-5</div></div>
+        <div class="price-bar highlight" style="height:100%;"><div class="bar-val">67.1%</div><div class="bar-label">$5-10</div></div>
+        <div class="price-bar" style="height:36%;"><div class="bar-val">23.8%</div><div class="bar-label">$10-15</div></div>
+        <div class="price-bar" style="height:7%;"><div class="bar-val">4.3%</div><div class="bar-label">$15-20</div></div>
+        <div class="price-bar" style="height:4%;"><div class="bar-val">2.6%</div><div class="bar-label">$20+</div></div>
+      </div>
+      <p style="font-size:12px;color:#64748b;margin-top:24px;margin-bottom:16px;">柱状高度代表销量占比，蓝色为主力价格带</p>
+
+      <div class="section-title">头部 Top5 商品</div>
+      <div class="table-wrapper">
+        <table class="data-table">
+          <thead><tr><th>排名</th><th>ASIN</th><th>价格</th><th>月销</th><th>评论数</th><th>评分</th><th>上架时间</th><th>销量占比</th></tr></thead>
+          <tbody>
+            <tr><td>1</td><td><a class="asin-link" href="https://www.amazon.com/dp/B085ZTGGTJ" target="_blank">B085ZTGGTJ</a></td><td>$11.99</td><td>8,129</td><td>12,692</td><td>4.3</td><td>2020-04</td><td>30.4%</td></tr>
+            <tr><td>2</td><td><a class="asin-link" href="https://www.amazon.com/dp/B085ZKR1XK" target="_blank">B085ZKR1XK</a></td><td>$7.99</td><td>4,436</td><td>7,829</td><td>4.2</td><td>2020-03</td><td>16.6%</td></tr>
+            <tr><td>3</td><td><a class="asin-link" href="https://www.amazon.com/dp/B0GHRLWGQX" target="_blank">B0GHRLWGQX</a><span class="new-badge">新品</span></td><td>$6.89</td><td>3,744</td><td>49</td><td>2.0</td><td>2026-01</td><td>14.0%</td></tr>
+            <tr><td>4</td><td><a class="asin-link" href="https://www.amazon.com/dp/B09G9GZZ2V" target="_blank">B09G9GZZ2V</a></td><td>$9.99</td><td>1,867</td><td>2,507</td><td>4.4</td><td>2021-10</td><td>7.0%</td></tr>
+            <tr><td>5</td><td><a class="asin-link" href="https://www.amazon.com/dp/B08JMCGDX1" target="_blank">B08JMCGDX1</a></td><td>$6.97</td><td>1,840</td><td>2,204</td><td>4.6</td><td>2020-10</td><td>6.6%</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+    </div>
+  </div>
+
+  </div><!-- /page-market -->
+
+  <!-- PAGE: 聊天记录 -->
+  <div class="page-section" id="page-chatlog">
+
+    <div style="margin-bottom:24px;">
+      <h2 style="font-size:22px;color:#f8fafc;margin-bottom:8px;">聊天记录存档</h2>
+      <p style="font-size:13px;color:#64748b;">每次选品对话的关键内容，方便回溯和复盘</p>
+    </div>
+
+    <!-- Session: 2026-02-25 -->
+    <div class="chat-session">
+      <div class="chat-session-header" onclick="toggleChat(this)">
+        <div>
+          <h3>2026-02-25 继续选市场 <span class="chat-tag">选品</span></h3>
+          <span class="chat-summary">确认选品标准，开始新一轮市场分析</span>
+        </div>
+        <span class="expand-icon">&#9660;</span>
+      </div>
+      <div class="chat-session-body open">
+        <div class="chat-msg user">
+          <div class="msg-role">用户</div>
+          我们继续选市场，你还记得我们的选品标准吗。今天我的聊天记录我希望你能在我们的本地网页里，单开一个页面保存一下，方便你之后回溯。
+        </div>
+        <div class="chat-msg ai">
+          <div class="msg-role">旺财</div>
+          选品标准记得：不做季节性、不做需资质、只做轻小件、利润率&gt;50%、售价&gt;$15、适合新手。已新增聊天记录页面。
+        </div>
+        <div class="chat-msg user">
+          <div class="msg-role">用户</div>
+          给我分析一下 Bread Proofing Baskets（面包发酵篮）这个细分市场的可行性，以及可以参照的ASIN。
+        </div>
+        <div class="chat-msg ai">
+          <div class="msg-role">旺财</div>
+          <strong>结论：不建议做。</strong><br>
+          - 均价$28.98，利润率57.93% — 数据面OK<br>
+          - 但评论壁垒极高：500+评论商品吃61%销量，1-50评论仅2.3%<br>
+          - Top5商品吃68.6%销量，头部集中严重<br>
+          - 有季节性波动（淡旺季差3倍）<br>
+          - 套装模式（篮+刮刀+割包刀+...），供应链复杂<br>
+          - 中国卖家占69%销量，内卷严重<br>
+          新手进去基本是送人头。
+        </div>
+        <div class="chat-msg user">
+          <div class="msg-role">用户</div>
+          那你帮我挖几个适合新手的市场看看。
+        </div>
+        <div class="chat-msg ai">
+          <div class="msg-role">旺财</div>
+          搜了两轮，过滤掉季节性（复活节/情人节/圣帕特里克节）和大品牌后，<br>
+          发现了一个极佳机会：<strong>蜂蜡面包袋 Beeswax Bread Bags</strong><br><br>
+          <strong>强烈推荐理由：</strong><br>
+          - Google Trends一年增长10倍，需求爆发中<br>
+          - 94个品牌极度分散，无垄断<br>
+          - 新品均评论仅62条，近1年新品贡献55.5%销量<br>
+          - 核心词搜索量合计48万+/月<br>
+          - 均价$19.42，利润率59.88%，重量0.67磅<br>
+          - 标杆：B0FS1YH17C(89评月销2236)、B0FB8HPRHG(68评月销2195)<br><br>
+          已在看板新增"蜂蜡面包袋"独立分析页面。
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /page-chatlog -->
+
+  <!-- PAGE: 知识库 -->
+  <div class="page-section" id="page-knowledge">
+    <div style="margin-bottom:24px;">
+      <h2 style="font-size:22px;color:#f8fafc;margin-bottom:8px;">选品知识库</h2>
+      <p style="font-size:13px;color:#64748b;">从每次分析中提炼的方法论、数据指标和案例教训</p>
+    </div>
+    <div class="knowledge-filters" style="display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap;">
+      <div class="filter-tab active" onclick="filterKnowledge('all',this)">全部</div>
+      <div class="filter-tab" onclick="filterKnowledge('选品方法论',this)">选品方法论</div>
+      <div class="filter-tab" onclick="filterKnowledge('数据指标',this)">数据指标</div>
+      <div class="filter-tab" onclick="filterKnowledge('运营策略',this)">运营策略</div>
+      <div class="filter-tab" onclick="filterKnowledge('选品案例',this)">选品案例</div>
+    </div>
+    <div id="knowledge-list"></div>
+  </div>
+
+</div><!-- /container -->
+</div><!-- /main-content -->
+
+<script src="knowledge/knowledge-data.js"></script>
+<script src="chats/chat-data.js"></script>
+<script>
+function toggleCard(header) {
+  const body = header.nextElementSibling;
+  const icon = header.querySelector('.expand-icon');
+  body.classList.toggle('open');
+  icon.classList.toggle('open');
+}
+
+function filterCards(type, el) {
+  document.querySelectorAll('.stats-bar .stat-card').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  document.querySelectorAll('.market-card').forEach(card => {
+    if (type === 'all' || card.dataset.verdict === type) {
+      card.style.display = 'block';
+    } else {
+      card.style.display = 'none';
+    }
+  });
+}
+
+document.querySelector('.card-body').classList.add('open');
+document.querySelector('.expand-icon').classList.add('open');
+
+function switchPage(page, el) {
+  document.querySelectorAll('.page-section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.sidebar-item').forEach(t => t.classList.remove('active'));
+  document.getElementById('page-' + page).classList.add('active');
+  el.classList.add('active');
+}
+
+function toggleChat(header) {
+  const body = header.nextElementSibling;
+  body.classList.toggle('open');
+}
+
+// === Knowledge Base ===
+function loadKnowledge() {
+  if (typeof KNOWLEDGE_DATA !== 'undefined') {
+    window._knowledgeData = KNOWLEDGE_DATA;
+    renderKnowledge(KNOWLEDGE_DATA);
+  } else {
+    document.getElementById('knowledge-list').innerHTML =
+      '<p style="color:#64748b;">知识库加载失败，请确认 knowledge/knowledge-data.js 文件存在</p>';
+  }
+}
+
+function renderKnowledge(data) {
+  const container = document.getElementById('knowledge-list');
+  container.innerHTML = data.map(k => `
+    <div class="knowledge-card" data-cat="${k.category}">
+      <div class="k-header">
+        <span class="k-title">${k.title}</span>
+        <span class="k-cat">${k.category}</span>
+      </div>
+      <div class="k-content">${k.content}</div>
+      <div class="k-footer">${k.date} | 来源: ${k.source}</div>
+    </div>
+  `).join('');
+}
+
+function filterKnowledge(cat, el) {
+  document.querySelectorAll('.knowledge-filters .filter-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  if (cat === 'all') {
+    renderKnowledge(window._knowledgeData);
+  } else {
+    renderKnowledge(window._knowledgeData.filter(k => k.category === cat));
+  }
+}
+
+loadKnowledge();
+</script>
+</body>
+</html>
