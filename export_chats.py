@@ -127,6 +127,7 @@ def to_obsidian_md(session):
         "---",
         f"date: {session['date']}",
         f"tags: [聊天记录]",
+        f"session_id: {session['session_id']}",
         f"messages: {session['message_count']}",
         "---",
         f"# {session['title']}",
@@ -186,9 +187,23 @@ def main():
         return
 
     chat_count = 0
+    # 收集已导出的 session_id
+    existing_sids = set()
+    for ef in glob.glob(os.path.join(CHAT_DIR, "*.md")):
+        with open(ef, "r", encoding="utf-8") as efh:
+            for line in efh:
+                if line.startswith("session_id:"):
+                    existing_sids.add(line.split(":",1)[1].strip())
+                    break
+                if line.strip() == "---" and len(existing_sids) > 0:
+                    break
+
     for f in sorted(files, key=os.path.getmtime):
         session = parse_session(f)
         if session["message_count"] < 2:
+            continue
+        if session["session_id"] in existing_sids:
+            chat_count += 1
             continue
         safe_title = re.sub(r'[/\\:*?"<>|]', '', session['title'])[:30]
         md_name = f"{session['date']} {safe_title}.md"
