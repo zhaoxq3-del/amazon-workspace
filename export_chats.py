@@ -203,8 +203,8 @@ def main():
         return
 
     chat_count = 0
-    # 收集已导出的 session_id
-    existing_sids = set()
+    # 收集已导出的 session_id -> 文件路径映射
+    sid_to_file = {}
     for ef in glob.glob(os.path.join(CHAT_DIR, "*.md")):
         with open(ef, "r", encoding="utf-8") as efh:
             in_fm = False
@@ -217,19 +217,18 @@ def main():
                     else:
                         break
                 if in_fm and line.startswith("session_id:"):
-                    existing_sids.add(line.split(":",1)[1].strip())
+                    sid_to_file[line.split(":",1)[1].strip()] = ef
                     break
 
     for f in sorted(files, key=os.path.getmtime):
         session = parse_session(f)
         if session["message_count"] < 2:
             continue
-        if session["session_id"] in existing_sids:
-            chat_count += 1
-            continue
+        # 查找已有文件（按session_id匹配），有则覆盖更新
+        existing_file = sid_to_file.get(session["session_id"])
         safe_title = re.sub(r'[/\\:*?"<>|]', '', session['title'])[:30]
         md_name = f"{session['date']} {safe_title}.md"
-        md_path = os.path.join(CHAT_DIR, md_name)
+        md_path = existing_file if existing_file else os.path.join(CHAT_DIR, md_name)
         with open(md_path, "w", encoding="utf-8") as mf:
             mf.write(to_obsidian_md(session))
         chat_count += 1
