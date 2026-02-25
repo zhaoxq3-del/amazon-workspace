@@ -35,6 +35,15 @@ def parse_session(filepath):
                 continue
             msg_type = d.get("type", "")
 
+            # 从 snapshot 或任何字段提取时间
+            if not first_ts:
+                snap = d.get("snapshot", {})
+                ts_str = snap.get("timestamp", "")
+                if not ts_str:
+                    ts_str = d.get("timestamp", "")
+                if ts_str and isinstance(ts_str, str) and "T" in ts_str:
+                    first_ts = ts_str
+
             if msg_type == "user":
                 text = d.get("message", "")
                 if isinstance(text, dict):
@@ -83,12 +92,16 @@ def parse_session(filepath):
                 })
 
     date_str = "未知日期"
-    if first_ts:
+    if first_ts and isinstance(first_ts, str) and "T" in first_ts:
         try:
-            ts_num = int(first_ts) if isinstance(first_ts, str) else first_ts
-            if ts_num > 1e12:
-                ts_num = ts_num / 1000
-            dt = datetime.fromtimestamp(ts_num)
+            dt = datetime.fromisoformat(first_ts.replace("Z", "+00:00"))
+            date_str = dt.strftime("%Y-%m-%d")
+        except:
+            pass
+    if date_str == "未知日期":
+        try:
+            mtime = os.path.getmtime(filepath)
+            dt = datetime.fromtimestamp(mtime)
             date_str = dt.strftime("%Y-%m-%d")
         except:
             pass
